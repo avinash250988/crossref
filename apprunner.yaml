@@ -5,7 +5,6 @@ build:
     build:
       - echo "Building FastAPI Product Search API with Docker"
 run:
-  
   command: python app_fixed6_prod_ready.py
   network:
     port: 8000
@@ -13,5 +12,6 @@ run:
   env:
     - name: PORT
       value: "8000"
+
 
 
