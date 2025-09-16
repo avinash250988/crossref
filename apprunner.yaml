@@ -1,0 +1,15 @@
+version: 1.0
+runtime: docker
+build:
+  commands:
+    build:
+      - echo "Building FastAPI Product Search API"
+run:
+  runtime-version: latest
+  command: python app_fixed6_prod_ready.py
+  network:
+    port: 8000
+    env: PORT
+  env:
+    - name: PORT
+      value: "8000"
