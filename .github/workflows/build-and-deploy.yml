@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKER_REPOSITORY: avinash250988/crossref-app
+  DOCKER_REPOSITORY: avi555/crossref-app
 
 jobs:
   build-and-push:
