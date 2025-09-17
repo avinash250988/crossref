@@ -31,10 +31,10 @@ jobs:
       with:
         registry-type: public
 
-    - name: Create ECR Public repository if it doesn't exist
+    - name: List ECR repositories (debug)
       run: |
-        aws ecr-public describe-repositories --repository-names $ECR_PUBLIC_REPOSITORY --region us-east-1 || \
-        aws ecr-public create-repository --repository-name $ECR_PUBLIC_REPOSITORY --region us-east-1
+        echo "Listing ECR Public repositories..."
+        aws ecr-public describe-repositories --region us-east-1 || echo "No repositories found or permission issue"
 
     - name: Build, tag, and push image to Amazon ECR Public
       env:
@@ -42,6 +42,8 @@ jobs:
         ECR_REPOSITORY: ${{ env.ECR_PUBLIC_REPOSITORY }}
         IMAGE_TAG: latest
       run: |
+        echo "Building image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        echo "Pushing image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "Image pushed to $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        echo "Image pushed successfully to $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
