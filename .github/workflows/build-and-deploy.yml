@@ -38,12 +38,10 @@ jobs:
 
     - name: Build, tag, and push image to Amazon ECR Public
       env:
-        ECR_REGISTRY: public.ecr.aws/e8ml0w3
-        ECR_REPOSITORY: ${{ env.ECR_PUBLIC_REPOSITORY }}
-        IMAGE_TAG: latest
+        FULL_IMAGE_URI: public.ecr.aws/e8m9l0w3/crossref-app:latest
       run: |
-        echo "Building image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        echo "Pushing image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "Image pushed successfully to $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        echo "Building image: $FULL_IMAGE_URI"
+        docker build -t $FULL_IMAGE_URI .
+        echo "Pushing image: $FULL_IMAGE_URI"
+        docker push $FULL_IMAGE_URI
+        echo "Image pushed successfully to $FULL_IMAGE_URI"
