@@ -1,7 +1,7 @@
 # FastAPI application for Dual Database Product Catalog Search API
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 import pickle
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -81,6 +81,9 @@ class SearchRequest(BaseModel):
         extra = "allow"
         max_extra_fields = 60
 
+# Union type to handle both single request and list of requests
+BatchSearchRequest = Union[SearchRequest, List[SearchRequest]]
+
 class ProductResult(BaseModel):
     # Input fields (preserved)
     item_description: str
@@ -114,6 +117,9 @@ class SearchResponse(BaseModel):
     total_results: int
     results: List[ProductResult]
     additional_fields: dict = {}
+
+# Union type to handle both single response and list of responses
+BatchSearchResponse = Union[SearchResponse, List[SearchResponse]]
 
 # Global variables for models and databases
 model = None
@@ -400,61 +406,104 @@ async def root():
         }
     }
 
-@app.post("/search", response_model=SearchResponse)
-async def search_endpoint(request: SearchRequest):
+async def process_single_search(request: SearchRequest) -> SearchResponse:
+    """
+    Process a single search request
+    """
+    # Validate query
+    if not request.item_description.strip():
+        raise HTTPException(status_code=400, detail="Item description cannot be empty")
+    
+    results = []
+    
+    # Search 450 Transformer database
+    result_450 = search_450_database(
+        query=request.item_description,
+        upc_filter=request.upc,
+        mpc_filter=request.mpc,
+        gtin_450_filter=request.gtin_450,
+        supplier_filter=request.supplier_no
+    )
+    if result_450:
+        results.append(result_450)
+    
+    # Search Product Catalog database
+    result_product = search_product_database(
+        query=request.item_description,
+        mpc_filter=request.mpc,
+        supplier_filter=request.supplier_no,
+        brand_filter=request.brand_name,
+        pack_size_filter=request.pack_size,
+        upc_filter=request.upc,
+        gtin_450_filter=request.gtin_450
+    )
+    if result_product:
+        results.append(result_product)
+    
+    # Capture any additional fields that were sent in the request
+    additional_fields = {}
+    for field_name, field_value in request.model_dump().items():
+        if field_name not in ['item_description', 'mpc', 'supplier_no', 'upc', 'gtin_450', 'brand_name', 'pack_size']:
+            additional_fields[field_name] = field_value
+    
+    return SearchResponse(
+        query=request.item_description,
+        total_results=len(results),
+        results=results,
+        additional_fields=additional_fields
+    )
+
+@app.post("/search", response_model=BatchSearchResponse)
+async def search_endpoint(request: BatchSearchRequest):
     """
     Search for products using semantic similarity across both databases
     
+    Accepts:
+    - Single search request: SearchRequest object
+    - Batch search requests: List[SearchRequest]
+    
     Returns:
+    - Single response: SearchResponse object
+    - Batch responses: List[SearchResponse]
+    
+    Each result contains:
     - AI_GTIN, AI_MPC, AI_supplier_no fields for each product
     - Similarity match score field for each product
     - Source identification for each result
     """
     try:
-        # Validate query
-        if not request.item_description.strip():
-            raise HTTPException(status_code=400, detail="Item description cannot be empty")
+        # Handle single request
+        if isinstance(request, dict) or hasattr(request, 'item_description'):
+            logger.info("Processing single search request")
+            return await process_single_search(request)
         
-        results = []
+        # Handle batch requests (list)
+        elif isinstance(request, list):
+            logger.info(f"Processing batch search request with {len(request)} items")
+            batch_results = []
+            
+            for i, single_request in enumerate(request):
+                try:
+                    result = await process_single_search(single_request)
+                    batch_results.append(result)
+                except Exception as e:
+                    logger.error(f"Error processing batch item {i}: {str(e)}")
+                    # Continue processing other items, but log the error
+                    error_response = SearchResponse(
+                        query=getattr(single_request, 'item_description', 'unknown'),
+                        total_results=0,
+                        results=[],
+                        additional_fields={"error": str(e)}
+                    )
+                    batch_results.append(error_response)
+            
+            return batch_results
         
-        # Search 450 Transformer database
-        result_450 = search_450_database(
-            query=request.item_description,
-            upc_filter=request.upc,
-            mpc_filter=request.mpc,
-            gtin_450_filter=request.gtin_450,
-            supplier_filter=request.supplier_no
-        )
-        if result_450:
-            results.append(result_450)
-        
-        # Search Product Catalog database
-        result_product = search_product_database(
-            query=request.item_description,
-            mpc_filter=request.mpc,
-            supplier_filter=request.supplier_no,
-            brand_filter=request.brand_name,
-            pack_size_filter=request.pack_size,
-            upc_filter=request.upc,
-            gtin_450_filter=request.gtin_450
-        )
-        if result_product:
-            results.append(result_product)
-        
-        # Capture any additional fields that were sent in the request
-        additional_fields = {}
-        for field_name, field_value in request.model_dump().items():
-            if field_name not in ['item_description', 'mpc', 'supplier_no', 'upc', 'gtin_450', 'brand_name', 'pack_size']:
-                additional_fields[field_name] = field_value
-        
-        return SearchResponse(
-            query=request.item_description,
-            total_results=len(results),
-            results=results,
-            additional_fields=additional_fields
-        )
-        
+        else:
+            raise HTTPException(status_code=400, detail="Invalid request format. Expected single SearchRequest or List[SearchRequest]")
+            
     except Exception as e:
+        logger.error(f"Search endpoint error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @app.get("/health")
