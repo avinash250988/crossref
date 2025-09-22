@@ -71,6 +71,7 @@ class SearchRequest(BaseModel):
     # 450 Transformer DB specific fields
     upc: Optional[str] = None
     gtin_450: Optional[str] = None
+    unique_id: Optional[str] = None  # New field for 450 database
     
     # Product Catalog DB specific fields
     brand_name: Optional[str] = None
@@ -93,6 +94,7 @@ class ProductResult(BaseModel):
     # 450 Transformer DB specific input fields
     upc: Optional[str] = None
     gtin_450: Optional[str] = None
+    unique_id: Optional[str] = None  # Input UniqueID for 450 database
     
     # Product Catalog DB specific input fields
     brand_name: Optional[str] = None
@@ -105,6 +107,7 @@ class ProductResult(BaseModel):
     AI_supplier_no: int
     AI_upc: Optional[int] = None
     AI_gtin_450: Optional[int] = None
+    AI_unique_id: Optional[str] = None  # Output UniqueID from 450 database
     AI_brand_name: Optional[str] = None
     AI_pack_size: Optional[str] = None
     
@@ -153,7 +156,7 @@ def load_product_database():
 
 def search_450_database(query: str, upc_filter: Optional[str] = None, 
                        mpc_filter: Optional[str] = None, gtin_450_filter: Optional[str] = None, 
-                       supplier_filter: Optional[str] = None) -> Optional[dict]:
+                       supplier_filter: Optional[str] = None, unique_id_filter: Optional[str] = None) -> Optional[dict]:
     """Search in 450 Transformer database"""
     try:
         vector_db = load_450_database()
@@ -165,6 +168,7 @@ def search_450_database(query: str, upc_filter: Optional[str] = None,
         mpcs = vector_db['mpcs']
         upcs = vector_db['upcs']
         gtin_450s = vector_db['gtin_450s']
+        unique_ids = vector_db.get('unique_ids', [])  # New UniqueID field
         embeddings = vector_db['embeddings']
         
         # Create embedding for the query
@@ -234,12 +238,15 @@ def search_450_database(query: str, upc_filter: Optional[str] = None,
                 mpc_val = str(mpcs[best_match]) if mpcs[best_match] and str(mpcs[best_match]).strip() else ""
                 upc_val = int(upcs[best_match]) if upcs[best_match] and str(upcs[best_match]).strip() else None
                 gtin_450_val = int(gtin_450s[best_match]) if gtin_450s[best_match] and str(gtin_450s[best_match]).strip() else None
+                # Extract UniqueID from the matched record
+                unique_id_val = str(unique_ids[best_match]) if best_match < len(unique_ids) and unique_ids[best_match] else None
             except (ValueError, TypeError):
                 gtin_val = 0
                 supplier_val = 0
                 mpc_val = ""
                 upc_val = None
                 gtin_450_val = None
+                unique_id_val = None
             
             return {
                 'item_description': query,
@@ -247,12 +254,14 @@ def search_450_database(query: str, upc_filter: Optional[str] = None,
                 'supplier_no': supplier_filter,  # Always show input value
                 'upc': upc_filter,  # Always show input value
                 'gtin_450': gtin_450_filter,  # Always show input value
+                'unique_id': unique_id_filter,  # Always show input value
                 'AI_item_description': descriptions[best_match],  # Always show database value
                 'AI_GTIN': gtin_val,  # Always show database value
                 'AI_MPC': mpc_val,  # Always show database value
                 'AI_supplier_no': supplier_val,  # Always show database value
                 'AI_upc': upc_val,  # Always show database value
                 'AI_gtin_450': gtin_450_val,  # Always show database value
+                'AI_unique_id': unique_id_val,  # Always show database value
                 'matching_score': round(float(best_score), 2),
                 'source': '450_transformer_master_data'
             }
@@ -422,7 +431,8 @@ async def process_single_search(request: SearchRequest) -> SearchResponse:
         upc_filter=request.upc,
         mpc_filter=request.mpc,
         gtin_450_filter=request.gtin_450,
-        supplier_filter=request.supplier_no
+        supplier_filter=request.supplier_no,
+        unique_id_filter=request.unique_id
     )
     if result_450:
         results.append(result_450)
@@ -443,7 +453,7 @@ async def process_single_search(request: SearchRequest) -> SearchResponse:
     # Capture any additional fields that were sent in the request
     additional_fields = {}
     for field_name, field_value in request.model_dump().items():
-        if field_name not in ['item_description', 'mpc', 'supplier_no', 'upc', 'gtin_450', 'brand_name', 'pack_size']:
+        if field_name not in ['item_description', 'mpc', 'supplier_no', 'upc', 'gtin_450', 'unique_id', 'brand_name', 'pack_size']:
             additional_fields[field_name] = field_value
     
     return SearchResponse(
@@ -467,7 +477,7 @@ async def search_endpoint(request: BatchSearchRequest):
     - Batch responses: List[SearchResponse]
     
     Each result contains:
-    - AI_GTIN, AI_MPC, AI_supplier_no fields for each product
+    - AI_GTIN, AI_MPC, AI_supplier_no, AI_unique_id fields for each product
     - Similarity match score field for each product
     - Source identification for each result
     """
@@ -479,11 +489,30 @@ async def search_endpoint(request: BatchSearchRequest):
         
         # Handle batch requests (list)
         elif isinstance(request, list):
+            # Add batch size limit for performance
+            MAX_BATCH_SIZE = 50
+            if len(request) > MAX_BATCH_SIZE:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Batch size too large. Maximum {MAX_BATCH_SIZE} records allowed per request. "
+                           f"Please split your {len(request)} records into smaller batches."
+                )
+            
             logger.info(f"Processing batch search request with {len(request)} items")
+            
+            # Pre-load models and databases once for the entire batch
+            model = load_model()
+            vector_db_450 = load_450_database()
+            vector_db_product = load_product_database()
+            logger.info("Models and databases pre-loaded for batch processing")
+            
             batch_results = []
             
             for i, single_request in enumerate(request):
                 try:
+                    if i % 10 == 0:  # Log progress every 10 items
+                        logger.info(f"Processing batch item {i+1}/{len(request)}")
+                    
                     result = await process_single_search(single_request)
                     batch_results.append(result)
                 except Exception as e:
@@ -497,6 +526,7 @@ async def search_endpoint(request: BatchSearchRequest):
                     )
                     batch_results.append(error_response)
             
+            logger.info(f"Batch processing completed: {len(batch_results)} results")
             return batch_results
         
         else:
