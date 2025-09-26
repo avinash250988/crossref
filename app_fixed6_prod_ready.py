@@ -275,7 +275,7 @@ def search_450_database(query: str, upc_filter: Optional[str] = None,
 def search_product_database(query: str, mpc_filter: Optional[str] = None, 
                            supplier_filter: Optional[str] = None, brand_filter: Optional[str] = None, 
                            pack_size_filter: Optional[str] = None, upc_filter: Optional[str] = None,
-                           gtin_450_filter: Optional[str] = None) -> Optional[dict]:
+                           gtin_450_filter: Optional[str] = None, unique_id_filter: Optional[str] = None) -> Optional[dict]:
     """Search in Product Catalog database"""
     try:
         vector_db = load_product_database()
@@ -382,6 +382,7 @@ def search_product_database(query: str, mpc_filter: Optional[str] = None,
                 'supplier_no': supplier_filter,  # Always show input value
                 'upc': upc_filter,  # Always show input value
                 'gtin_450': gtin_450_filter,  # Always show input value
+                'unique_id': unique_id_filter,  # Always show input value
                 'brand_name': brand_filter,  # Always show input value
                 'pack_size': pack_size_filter,  # Always show input value
                 'AI_item_description': descriptions[best_match],  # Always show database value
@@ -445,7 +446,8 @@ async def process_single_search(request: SearchRequest) -> SearchResponse:
         brand_filter=request.brand_name,
         pack_size_filter=request.pack_size,
         upc_filter=request.upc,
-        gtin_450_filter=request.gtin_450
+        gtin_450_filter=request.gtin_450,
+        unique_id_filter=request.unique_id
     )
     if result_product:
         results.append(result_product)
