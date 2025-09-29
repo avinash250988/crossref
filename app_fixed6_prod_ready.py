@@ -156,7 +156,8 @@ def load_product_database():
 
 def search_450_database(query: str, upc_filter: Optional[str] = None, 
                        mpc_filter: Optional[str] = None, gtin_450_filter: Optional[str] = None, 
-                       supplier_filter: Optional[str] = None, unique_id_filter: Optional[str] = None) -> Optional[dict]:
+                       supplier_filter: Optional[str] = None, unique_id_filter: Optional[str] = None,
+                       brand_filter: Optional[str] = None, pack_size_filter: Optional[str] = None) -> Optional[dict]:
     """Search in 450 Transformer database"""
     try:
         vector_db = load_450_database()
@@ -255,6 +256,8 @@ def search_450_database(query: str, upc_filter: Optional[str] = None,
                 'upc': upc_filter,  # Always show input value
                 'gtin_450': gtin_450_filter,  # Always show input value
                 'unique_id': unique_id_filter,  # Always show input value
+                'brand_name': brand_filter,  # Always show input value
+                'pack_size': pack_size_filter,  # Always show input value
                 'AI_item_description': descriptions[best_match],  # Always show database value
                 'AI_GTIN': gtin_val,  # Always show database value
                 'AI_MPC': mpc_val,  # Always show database value
@@ -262,6 +265,8 @@ def search_450_database(query: str, upc_filter: Optional[str] = None,
                 'AI_upc': upc_val,  # Always show database value
                 'AI_gtin_450': gtin_450_val,  # Always show database value
                 'AI_unique_id': unique_id_val,  # Always show database value
+                'AI_brand_name': None,  # 450 database doesn't have brand_name
+                'AI_pack_size': None,  # 450 database doesn't have pack_size
                 'matching_score': round(float(best_score), 2),
                 'source': '450_transformer_master_data'
             }
@@ -433,7 +438,9 @@ async def process_single_search(request: SearchRequest) -> SearchResponse:
         mpc_filter=request.mpc,
         gtin_450_filter=request.gtin_450,
         supplier_filter=request.supplier_no,
-        unique_id_filter=request.unique_id
+        unique_id_filter=request.unique_id,
+        brand_filter=request.brand_name,
+        pack_size_filter=request.pack_size
     )
     if result_450:
         results.append(result_450)
