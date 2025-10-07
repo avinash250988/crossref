@@ -102,11 +102,11 @@ class ProductResult(BaseModel):
     
     # AI-generated output fields (prefixed with AI_)
     AI_item_description: str
-    AI_GTIN: int
+    AI_GTIN: str
     AI_MPC: str
     AI_supplier_no: int
-    AI_upc: Optional[int] = None
-    AI_gtin_450: Optional[int] = None
+    AI_upc: Optional[str] = None
+    AI_gtin_450: Optional[str] = None
     AI_unique_id: Optional[str] = None  # Output UniqueID from 450 database
     AI_brand_name: Optional[str] = None
     AI_pack_size: Optional[str] = None
@@ -232,17 +232,17 @@ def search_450_database(query: str, upc_filter: Optional[str] = None,
                 best_match = i
         
         if best_match is not None:
-            # Safe conversion to integers
+            # Safe conversion - keep ID fields as strings to preserve leading zeros
             try:
-                gtin_val = int(gtins[best_match]) if gtins[best_match] and str(gtins[best_match]).strip() else 0
+                gtin_val = str(gtins[best_match]) if gtins[best_match] and str(gtins[best_match]).strip() else "0"
                 supplier_val = int(supplier_numbers[best_match]) if supplier_numbers[best_match] and str(supplier_numbers[best_match]).strip() else 0
                 mpc_val = str(mpcs[best_match]) if mpcs[best_match] and str(mpcs[best_match]).strip() else ""
-                upc_val = int(upcs[best_match]) if upcs[best_match] and str(upcs[best_match]).strip() else None
-                gtin_450_val = int(gtin_450s[best_match]) if gtin_450s[best_match] and str(gtin_450s[best_match]).strip() else None
+                upc_val = str(upcs[best_match]) if upcs[best_match] and str(upcs[best_match]).strip() else None
+                gtin_450_val = str(gtin_450s[best_match]) if gtin_450s[best_match] and str(gtin_450s[best_match]).strip() else None
                 # Extract UniqueID from the matched record
                 unique_id_val = str(unique_ids[best_match]) if best_match < len(unique_ids) and unique_ids[best_match] else None
             except (ValueError, TypeError):
-                gtin_val = 0
+                gtin_val = "0"
                 supplier_val = 0
                 mpc_val = ""
                 upc_val = None
@@ -367,15 +367,15 @@ def search_product_database(query: str, mpc_filter: Optional[str] = None,
                 best_match = i
         
         if best_match is not None:
-            # Safe conversion to integers
+            # Safe conversion - keep ID fields as strings to preserve leading zeros
             try:
-                gtin_val = int(gtins[best_match]) if gtins[best_match] and str(gtins[best_match]).strip() else 0
+                gtin_val = str(gtins[best_match]) if gtins[best_match] and str(gtins[best_match]).strip() else "0"
                 supplier_val = int(supplier_numbers[best_match]) if supplier_numbers[best_match] and str(supplier_numbers[best_match]).strip() else 0
                 mpc_val = str(mpcs[best_match]) if mpcs[best_match] and str(mpcs[best_match]).strip() else ""
                 brand_val = str(brand_names[best_match]) if brand_names[best_match] and str(brand_names[best_match]).strip() else ""
                 pack_size_val = str(pack_sizes[best_match]) if pack_sizes[best_match] and str(pack_sizes[best_match]).strip() else ""
             except (ValueError, TypeError):
-                gtin_val = 0
+                gtin_val = "0"
                 supplier_val = 0
                 mpc_val = ""
                 brand_val = ""
